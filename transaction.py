@@ -101,80 +101,61 @@ if not customer_data.empty:
     if not customer_transactions.empty:
         st.subheader("Transaction-Level Insights")
 
-        # Ensure PERIOD is used correctly and exists
-        if "PERIOD" in customer_transactions.columns:
-            customer_transactions["Month"] = customer_transactions["PERIOD"]
-        else:
-            st.error("PERIOD column is missing in the data!")
+        # Group transactions by YEAR
+        yearly_transactions = (
+            customer_transactions.groupby(["YEAR"])["Total Amount Purchased"]
+            .sum()
+            .reset_index()
+        )
 
-        # Group data by YEAR and PERIOD (Month)
-        if "YEAR" in customer_transactions.columns:
-            # Group transactions by YEAR and PERIOD
-            yearly_transactions = (
-                customer_transactions.groupby(["YEAR", "Month"])["Total Amount Purchased"]
-                .sum()
-                .reset_index()
-            )
+        # Create an interactive line plot using Plotly
+        fig = px.line(
+            yearly_transactions,
+            x="YEAR",
+            y="Total Amount Purchased",
+            color_discrete_sequence=["#636EFA"],
+            markers=True,
+            title=f"Yearly Transactions for {customer_name}",
+        )
 
-            # Create an interactive line plot using Plotly
-            fig = px.line(
-                yearly_transactions,
-                x="YEAR",
-                y="Total Amount Purchased",
-                color_discrete_sequence=["#636EFA"],
-                markers=True,
-                title=f"Yearly Transactions for {customer_name}",
-            )
+        # Add hover information
+        fig.update_traces(
+            hovertemplate="<b>Total Amount Purchased:</b> %{y:,.2f} AED"
+        )
 
-            # Add hover information
-            fig.update_traces(
-                hovertemplate=(
-                    "<b>Total Amount Purchased:</b> %{y:,.2f} AED"
-                )
-            )
+        # Update layout to make it clean and professional
+        fig.update_layout(
+            xaxis_title="Year",
+            yaxis_title="Total Amount Purchased (AED)",
+            xaxis=dict(
+                tickvals=sorted(yearly_transactions["YEAR"].unique()),  # Only show unique years
+                tickformat="d",  # Format as integers
+            ),
+            yaxis=dict(tickformat=",.2f"),  # Format y-axis as currency
+            template="plotly_white",
+        )
 
-            # Update layout to make it clean and professional
-            fig.update_layout(
-                xaxis_title="Year",
-                yaxis_title="Total Amount Purchased (AED)",
-                xaxis=dict(
-                    tickvals=sorted(yearly_transactions["YEAR"].unique()),  # Only show unique years
-                    tickformat="d",  # Format as integers
-                ),
-                yaxis=dict(tickformat=",.2f"),  # Format y-axis as currency
-                template="plotly_white",
-            )
+        # Display the plot in Streamlit
+        st.plotly_chart(fig, use_container_width=True)
 
-            # Display the plot in Streamlit
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.error("YEAR column is missing in the data!")
-
-        # Display additional customer insights in a horizontal format
+        # Display additional customer insights in a vertical format, centered
         st.markdown("---")
         st.subheader("Additional Customer Insights")
-        cols = st.columns(5)
-
-        cols[0].metric("Customer Lifetime", customer_transactions["Customer_Lifetime"].iloc[0])
-        cols[1].metric(
-            "Months Since Last Purchase",
-            customer_transactions["Months_Since_Last_Purchase"].iloc[0],
-        )
-        cols[2].metric(
-            "Max Time Without Purchase",
-            customer_transactions["Max_Time_Without_Purchase"].iloc[0],
-        )
-        cols[3].metric(
-            "Trend Classification",
-            customer_transactions["Trend_Classification"].iloc[0],
-        )
-        cols[4].metric(
-            "Average Purchase Value (AED)",
-            f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f} AED",
-        )
+        insight_cols = st.columns(1)
+        with insight_cols[0]:
+            st.write("### Customer Lifetime")
+            st.write(f"**{customer_transactions['Customer_Lifetime'].iloc[0]}**")
+            st.write("### Months Since Last Purchase")
+            st.write(f"**{customer_transactions['Months_Since_Last_Purchase'].iloc[0]}**")
+            st.write("### Max Time Without Purchase")
+            st.write(f"**{customer_transactions['Max_Time_Without_Purchase'].iloc[0]}**")
+            st.write("### Trend Classification")
+            st.write(f"**{customer_transactions['Trend_Classification'].iloc[0]}**")
+            st.write("### Average Purchase Value (AED)")
+            st.write(f"**{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f} AED**")
+            st.write("### Total Transactions")
+            st.write(f"**{customer_transactions['Customer_Transactions'].iloc[0]}**")
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
-
-
