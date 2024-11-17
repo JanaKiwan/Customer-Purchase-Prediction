@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 # Load datasets
 @st.cache_data
@@ -92,8 +93,8 @@ if not customer_data.empty:
 
     # Display outcomes
     prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
-    st.write(f"**Prediction:** {prediction_text}")
-    st.write(f"**Probability:** {probability:.2f}%")
+    st.markdown(f"### Prediction: **{prediction_text}**")
+    st.markdown(f"### Probability: **{probability:.2f}%**")
 
     # Display transaction-level data for the selected customer
     customer_transactions = transaction_data[transaction_data["CUSTOMERNAME"] == customer_name]
@@ -103,7 +104,7 @@ if not customer_data.empty:
 
         # Group transactions by YEAR
         yearly_transactions = (
-            customer_transactions.groupby(["YEAR"])["Total Amount Purchased"]
+            customer_transactions.groupby("YEAR")["Total Amount Purchased"]
             .sum()
             .reset_index()
         )
@@ -138,24 +139,64 @@ if not customer_data.empty:
         # Display the plot in Streamlit
         st.plotly_chart(fig, use_container_width=True)
 
-        # Display additional customer insights in a vertical format, centered
+        # Display additional customer insights with a colorful table
         st.markdown("---")
         st.subheader("Additional Customer Insights")
-        insight_cols = st.columns(1)
-        with insight_cols[0]:
-            st.write("### Customer Lifetime")
-            st.write(f"**{customer_transactions['Customer_Lifetime'].iloc[0]}**")
-            st.write("### Months Since Last Purchase")
-            st.write(f"**{customer_transactions['Months_Since_Last_Purchase'].iloc[0]}**")
-            st.write("### Max Time Without Purchase")
-            st.write(f"**{customer_transactions['Max_Time_Without_Purchase'].iloc[0]}**")
-            st.write("### Trend Classification")
-            st.write(f"**{customer_transactions['Trend_Classification'].iloc[0]}**")
-            st.write("### Average Purchase Value (AED)")
-            st.write(f"**{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f} AED**")
-            st.write("### Total Transactions")
-            st.write(f"**{customer_transactions['Customer_Transactions'].iloc[0]}**")
+
+        # Prepare the data for the table
+        insights_data = {
+            "Metric": [
+                "Customer Lifetime",
+                "Months Since Last Purchase",
+                "Max Time Without Purchase",
+                "Trend Classification",
+                "Average Purchase Value (AED)",
+                "Total Transactions",
+            ],
+            "Value": [
+                customer_transactions["Customer_Lifetime"].iloc[0],
+                customer_transactions["Months_Since_Last_Purchase"].iloc[0],
+                customer_transactions["Max_Time_Without_Purchase"].iloc[0],
+                customer_transactions["Trend_Classification"].iloc[0],
+                f"{round(customer_transactions['Average_Purchase_Value'].iloc[0], 2):,.2f} AED",
+                customer_transactions["Customer_Transactions"].iloc[0],
+            ],
+        }
+
+        # Create a Plotly Table
+        table_fig = go.Figure(
+            data=[
+                go.Table(
+                    header=dict(
+                        values=["<b>Metric</b>", "<b>Value</b>"],
+                        fill_color="#2D3748",
+                        font=dict(color="white", size=14),
+                        align="center",
+                    ),
+                    cells=dict(
+                        values=[
+                            insights_data["Metric"],
+                            insights_data["Value"],
+                        ],
+                        fill_color="#E2E8F0",
+                        font=dict(color="black", size=12),
+                        align="center",
+                    ),
+                )
+            ]
+        )
+
+        # Update layout for the table
+        table_fig.update_layout(
+            margin=dict(l=0, r=0, t=10, b=10),
+            height=400,
+        )
+
+        # Display the table
+        st.plotly_chart(table_fig, use_container_width=True)
+
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
+
