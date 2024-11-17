@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 
 # Load datasets
 @st.cache_data
@@ -117,11 +116,14 @@ if not customer_data.empty:
             markers=True,
             title=f"Yearly Transactions for {customer_name}",
             template="plotly_white",
-            text="Total Amount Purchased",
         )
 
         # Update layout for a professional look
         fig.update_layout(
+            xaxis=dict(
+                tickmode="linear",  # Show only distinct year values
+                tickformat=".0f",  # Remove decimals
+            ),
             xaxis_title="Year",
             yaxis_title="Total Amount Purchased (AED)",
         )
@@ -133,41 +135,22 @@ if not customer_data.empty:
         st.markdown("---")
         st.subheader("📋 Additional Customer Insights")
 
-        # Display customer insights as separate metrics or bar charts
-        col1, col2 = st.columns(2)
+        # Display customer insights as separate metrics
+        col1, col2, col3 = st.columns(3)
 
         with col1:
             st.metric("Customer Lifetime (Months)", customer_transactions["Customer_Lifetime"].iloc[0])
             st.metric("Months Since Last Purchase", customer_transactions["Months_Since_Last_Purchase"].iloc[0])
 
         with col2:
-            st.metric("Max Time Without Purchase (Months)", customer_transactions["Max_Time_Without_Purchase"].iloc[0])
+            st.metric("Maximum Months Without Purchase", customer_transactions["Max_Time_Without_Purchase"].iloc[0])
             st.metric("Total Transactions", customer_transactions["Customer_Transactions"].iloc[0])
 
-        # Display a bar chart for trend classification and average purchase value
-        st.markdown("### Trend Classification & Average Purchase Value")
-
-        bar_chart_data = pd.DataFrame({
-            "Metric": ["Trend Classification", "Average Purchase Value (AED)"],
-            "Value": [
-                customer_transactions["Trend_Classification"].iloc[0],
-                customer_transactions["Average_Purchase_Value"].iloc[0],
-            ],
-        })
-
-        trend_chart = px.bar(
-            bar_chart_data,
-            x="Metric",
-            y="Value",
-            title="Customer Insights",
-            text="Value",
-            template="plotly_white",
-        )
-
-        st.plotly_chart(trend_chart, use_container_width=True)
+        with col3:
+            st.metric("Average Purchase Value (AED)", f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f}")
+            st.metric("Trend Classification", customer_transactions["Trend_Classification"].iloc[0])
 
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
-
