@@ -92,8 +92,8 @@ if not customer_data.empty:
 
     # Display outcomes
     prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
-    st.markdown(f"<h3 style='color:blue;'>Prediction: {prediction_text}</h3>", unsafe_allow_html=True)
-    st.markdown(f"<h3 style='color:green;'>Probability: {probability:.2f}%</h3>", unsafe_allow_html=True)
+    st.write(f"**Prediction:** {prediction_text}")
+    st.write(f"**Probability:** {probability:.2f}%")
 
     # Display transaction-level data for the selected customer
     customer_transactions = transaction_data[transaction_data["CUSTOMERNAME"] == customer_name]
@@ -101,44 +101,55 @@ if not customer_data.empty:
     if not customer_transactions.empty:
         st.subheader("Transaction-Level Insights")
 
-        # Group transactions by year and month
+        # Aggregate transactions by year and month
         customer_transactions["Month"] = customer_transactions["PERIOD"]
-        yearly_transactions = customer_transactions.groupby(["YEAR", "Month"])["Customer_Transactions"].sum().reset_index()
+        yearly_transactions = (
+            customer_transactions.groupby(["YEAR", "Month"])["Customer_Transactions"]
+            .sum()
+            .reset_index()
+        )
 
-        # Create an interactive line plot
+        # Create an interactive line plot using Plotly
         fig = px.line(
             yearly_transactions,
             x="YEAR",
             y="Customer_Transactions",
-            color="Month",
+            color_discrete_sequence=["#636EFA"],
             markers=True,
             title=f"Yearly Transactions for {customer_name}",
-            labels={"Customer_Transactions": "Transactions", "YEAR": "Year"},
         )
-        fig.update_traces(mode="lines+markers")
-        st.plotly_chart(fig)
+        fig.update_traces(hovertemplate="Year: %{x}<br>Month: %{customdata}<br>Transactions: %{y}")
+        fig.update_layout(
+            xaxis_title="Year",
+            yaxis_title="Transactions",
+            xaxis=dict(tickmode="array", tickvals=yearly_transactions["YEAR"].unique()),
+            template="plotly_white",
+        )
+        fig.update_traces(customdata=yearly_transactions["Month"])
+        st.plotly_chart(fig, use_container_width=True)
 
-        # Display additional customer insights in a styled format
+        # Display additional customer insights in a horizontal format
+        st.markdown("---")
         st.subheader("Additional Customer Insights")
-        insights = customer_transactions.iloc[0][[
-            "Customer_Lifetime",
-            "Months_Since_Last_Purchase",
-            "Max_Time_Without_Purchase",
-            "Trend_Classification",
-            "Average_Purchase_Value",
-        ]]
-        st.markdown("<div style='display:flex; flex-wrap:wrap; gap:20px;'>", unsafe_allow_html=True)
-        for key, value in insights.items():
-            st.markdown(
-                f"""
-                <div style='background-color:#f8f9fa; border:1px solid #ddd; border-radius:8px; padding:15px; text-align:center; width:200px;'>
-                    <h4 style='margin:0; color:#343a40;'>{key}</h4>
-                    <p style='margin:0; font-size:20px; font-weight:bold; color:#007bff;'>{value}</p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        st.markdown("</div>", unsafe_allow_html=True)
+        cols = st.columns(5)
+
+        cols[0].metric("Customer Lifetime", customer_transactions["Customer_Lifetime"].iloc[0])
+        cols[1].metric(
+            "Months Since Last Purchase",
+            customer_transactions["Months_Since_Last_Purchase"].iloc[0],
+        )
+        cols[2].metric(
+            "Max Time Without Purchase",
+            customer_transactions["Max_Time_Without_Purchase"].iloc[0],
+        )
+        cols[3].metric(
+            "Trend Classification",
+            customer_transactions["Trend_Classification"].iloc[0],
+        )
+        cols[4].metric(
+            "Average Purchase Value (AED)",
+            f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f}",
+        )
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
