@@ -1,85 +1,93 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import joblib
 
-# =========================
-# Load Models and Pipelines
-# =========================
-# Load preprocessing pipeline, original column structure, and preprocessing metadata
-preprocessor_pipeline = joblib.load("preprocessor_pipeline.pkl")
-original_columns = joblib.load("original_columns.pkl")
-preprocessing_metadata = joblib.load("preprocessing_metadata.pkl")
+# Load the Excel file
+@st.cache_data
+def load_data():
+    return pd.read_excel("customer_agg_with_predictions.xlsx")
 
-# Load models and their results
-models = {
-    "Logistic Regression (L1)": {
-        "model": joblib.load("best_logistic_pipeline.pkl"),
-        "metrics": np.load("logistic_pipeline_results.npy", allow_pickle=True).item()
+# Load the dataset
+data = load_data()
+
+# Map metrics and thresholds for each model
+model_metrics = {
+    "Lasso Logistic Regression": {
+        "threshold": 0.31,
+        "roc_auc": 0.93,
+        "true_positive_rate": "91%",
+        "false_negative_rate": "15%",
     },
-    "Logistic Regression (L2)": {
-        "model": joblib.load("best_lr_model.pkl"),
-        "metrics": np.load("lr_model_results.npy", allow_pickle=True).item()
+    "L2 Logistic Regression": {
+        "threshold": 0.31,
+        "roc_auc": 0.93,
+        "true_positive_rate": "91%",
+        "false_negative_rate": "15%",
     },
-    "Support Vector Classifier (Calibrated)": {
-        "model": joblib.load("best_svc_pipeline.pkl"),
-        "metrics": np.load("svc_pipeline_results.npy", allow_pickle=True).item()
+    "Calibrated SVC": {
+        "threshold": 0.35,
+        "roc_auc": 0.93,
+        "true_positive_rate": "90%",
+        "false_negative_rate": "21%",
     },
     "Decision Tree": {
-        "model": joblib.load("best_decision_tree_model.pkl"),
-        "metrics": np.load("decision_tree_model_results.npy", allow_pickle=True).item()
-    }
+        "threshold": 0.39,
+        "roc_auc": 0.90,
+        "true_positive_rate": "84%",
+        "false_negative_rate": "9%",
+    },
 }
 
-# =========================
-# Load Dataset
-# =========================
-# Directly load the dataset for predictions
-data = pd.read_excel("customer_transformed_data_with_cltv.xlsx")
-st.title("Customer Purchase Prediction")
-st.write("Loaded Dataset Preview:")
-st.dataframe(data.head())
+# Model columns
+model_columns = {
+    "Lasso Logistic Regression": (
+        "Lasso Logistic Regression_Prediction",
+        "Lasso Logistic Regression_Probability",
+    ),
+    "L2 Logistic Regression": (
+        "L2 Logistic Regression_Prediction",
+        "L2 Logistic Regression_Probability",
+    ),
+    "Calibrated SVC": (
+        "Calibrated SVC_Prediction",
+        "Calibrated SVC_Probability",
+    ),
+    "Decision Tree": (
+        "Decision Tree_Prediction",
+        "Decision Tree_Probability",
+    ),
+}
 
-# Align columns to the original structure
-data = data[original_columns["categorical_vars"] + original_columns["numerical_vars"]]
+# Streamlit App
+st.title("Customer Purchase Prediction Viewer")
 
-# =========================
 # Model Selection
-# =========================
-st.sidebar.title("Model Selection")
-selected_model_name = st.sidebar.selectbox("Select a Model for Prediction:", list(models.keys()))
-selected_model = models[selected_model_name]["model"]
-selected_metrics = models[selected_model_name]["metrics"]
-st.sidebar.write(f"Selected Model: **{selected_model_name}**")
+selected_model = st.selectbox("Select a Model", list(model_columns.keys()))
 
-# =========================
-# Prediction
-# =========================
-if st.button("Predict"):
-    # Preprocess the data
-    preprocessed_data = preprocessor_pipeline.transform(data)
+# Sidebar Metrics
+st.sidebar.header("Model Metrics")
+st.sidebar.metric("Threshold", model_metrics[selected_model]["threshold"])
+st.sidebar.metric("ROC AUC Score", model_metrics[selected_model]["roc_auc"])
+st.sidebar.metric("True Positive Rate", model_metrics[selected_model]["true_positive_rate"])
+st.sidebar.metric("False Negative Rate", model_metrics[selected_model]["false_negative_rate"])
 
-    # Generate predictions and probabilities
-    predictions = selected_model.predict(preprocessed_data)
-    probabilities = selected_model.predict_proba(preprocessed_data)[:, 1]
+# Customer Dropdown
+customer_name = st.selectbox("Select a Customer", data["CUSTOMERNAME"].unique())
 
-    # Apply the best threshold from the model's training
-    threshold = selected_metrics.get("best_threshold", 0.5)
-    prediction_outcome = (probabilities >= threshold).astype(int)
+# Extract model-specific columns
+prediction_col, probability_col = model_columns[selected_model]
 
-    # Append results to the dataset
-    data["Purchase Prediction"] = prediction_outcome
-    data["Purchase Probability"] = probabilities
+# Filter data for the selected customer
+customer_data = data[data["CUSTOMERNAME"] == customer_name]
 
-    # Display the predictions
-    st.write("Prediction Results:")
-    st.dataframe(data)
+if not customer_data.empty:
+    st.subheader(f"Prediction Details for {customer_name}")
+    prediction = customer_data[prediction_col].iloc[0]
+    probability = customer_data[probability_col].iloc[0] * 100  # Convert to percentage
 
-    # Download link for results
-    st.download_button(
-        label="Download Predictions",
-        data=data.to_csv(index=False),
-        file_name="customer_predictions.csv",
-        mime="text/csv"
-    )
+    # Display outcomes
+    prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
+    st.write(f"**Prediction:** {prediction_text}")
+    st.write(f"**Probability:** {probability:.2f}%")
+else:
+    st.error("Customer not found in the dataset.")
 
