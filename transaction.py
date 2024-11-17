@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 # Load datasets
 @st.cache_data
@@ -92,8 +92,8 @@ if not customer_data.empty:
 
     # Display outcomes
     prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
-    st.write(f"**Prediction:** {prediction_text}")
-    st.write(f"**Probability:** {probability:.2f}%")
+    st.markdown(f"<h3 style='color:blue;'>Prediction: {prediction_text}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='color:green;'>Probability: {probability:.2f}%</h3>", unsafe_allow_html=True)
 
     # Display transaction-level data for the selected customer
     customer_transactions = transaction_data[transaction_data["CUSTOMERNAME"] == customer_name]
@@ -105,20 +105,21 @@ if not customer_data.empty:
         customer_transactions["Month"] = customer_transactions["PERIOD"]
         yearly_transactions = customer_transactions.groupby(["YEAR", "Month"])["Customer_Transactions"].sum().reset_index()
 
-        # Summarize transactions by year
-        yearly_summary = customer_transactions.groupby("YEAR")["Customer_Transactions"].sum()
+        # Create an interactive line plot
+        fig = px.line(
+            yearly_transactions,
+            x="YEAR",
+            y="Customer_Transactions",
+            color="Month",
+            markers=True,
+            title=f"Yearly Transactions for {customer_name}",
+            labels={"Customer_Transactions": "Transactions", "YEAR": "Year"},
+        )
+        fig.update_traces(mode="lines+markers")
+        st.plotly_chart(fig)
 
-        # Plot yearly transactions
-        plt.figure(figsize=(10, 6))
-        plt.bar(yearly_summary.index, yearly_summary.values, color="skyblue", alpha=0.8)
-        plt.title(f"Yearly Transactions for {customer_name}", fontsize=16)
-        plt.xlabel("Year", fontsize=14)
-        plt.ylabel("Total Transactions", fontsize=14)
-        plt.xticks(yearly_summary.index, rotation=45)
-        plt.grid(axis="y", linestyle="--", alpha=0.7)
-        st.pyplot(plt)
-
-        # Display additional customer insights
+        # Display additional customer insights in a styled format
+        st.subheader("Additional Customer Insights")
         insights = customer_transactions.iloc[0][[
             "Customer_Lifetime",
             "Months_Since_Last_Purchase",
@@ -126,9 +127,20 @@ if not customer_data.empty:
             "Trend_Classification",
             "Average_Purchase_Value",
         ]]
-        st.write("### Additional Customer Insights")
-        st.write(insights.to_frame().rename(columns={0: "Value"}))
+        st.markdown("<div style='display:flex; flex-wrap:wrap; gap:20px;'>", unsafe_allow_html=True)
+        for key, value in insights.items():
+            st.markdown(
+                f"""
+                <div style='background-color:#f8f9fa; border:1px solid #ddd; border-radius:8px; padding:15px; text-align:center; width:200px;'>
+                    <h4 style='margin:0; color:#343a40;'>{key}</h4>
+                    <p style='margin:0; font-size:20px; font-weight:bold; color:#007bff;'>{value}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
+
