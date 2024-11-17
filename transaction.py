@@ -64,7 +64,7 @@ model_columns = {
 }
 
 # Streamlit App
-st.title("Customer Purchase Prediction Viewer 🎯")
+st.title("Customer Purchase Insights Dashboard")
 
 # Model Selection
 selected_model = st.selectbox("Select a Model", list(model_columns.keys()))
@@ -86,29 +86,53 @@ prediction_col, probability_col = model_columns[selected_model]
 customer_data = data[data["CUSTOMERNAME"] == customer_name]
 
 if not customer_data.empty:
-    st.subheader(f"Prediction Details for {customer_name}")
     prediction = customer_data[prediction_col].iloc[0]
     probability = customer_data[probability_col].iloc[0] * 100  # Convert to percentage
 
-    # Display outcomes with colorful badges
+    # Display outcomes with badges
     prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
     st.markdown(f"### Prediction: **:green[{prediction_text}]**" if prediction == 1 else f"### Prediction: **:red[{prediction_text}]**")
     st.markdown(f"### Probability: **:blue[{probability:.2f}%]**")
 
-    # Display transaction-level data for the selected customer
+    # Transaction data for selected customer
     customer_transactions = transaction_data[transaction_data["CUSTOMERNAME"] == customer_name]
 
     if not customer_transactions.empty:
-        st.subheader("📈 Transaction-Level Insights")
+        st.subheader("📈 Customer Insights")
 
-        # Group transactions by YEAR
+        # Calculate additional metrics
+        mean_time_between_purchases = customer_transactions["Mean_Time_Between_Purchases"].mean()
+        most_purchased_item = customer_transactions["ITEMGROUPDESCRIPTION"].mode()[0] if not customer_transactions["ITEMGROUPDESCRIPTION"].mode().empty else "N/A"
+        country = customer_transactions["COUNTRYNAME"].iloc[0]
+
+        # Display metrics in styled cards
+        def style_card(header, value, background_color):
+            return f"""
+            <div style="background-color: {background_color}; padding: 10px; border-radius: 5px; text-align: center; color: white; font-size: 18px;">
+                <strong>{header}</strong><br>{value}
+            </div>
+            """
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown(style_card("Country", country, "#4CAF50"), unsafe_allow_html=True)
+            st.markdown(style_card("Customer Lifetime (Months)", customer_transactions["Customer_Lifetime"].iloc[0], "#2196F3"), unsafe_allow_html=True)
+        with col2:
+            st.markdown(style_card("Mean Time Between Purchases (Months)", f"{mean_time_between_purchases:.2f}", "#FF9800"), unsafe_allow_html=True)
+            st.markdown(style_card("Total Transactions", customer_transactions["Customer_Transactions"].iloc[0], "#9C27B0"), unsafe_allow_html=True)
+        with col3:
+            st.markdown(style_card("Most Purchased Item", most_purchased_item, "#F44336"), unsafe_allow_html=True)
+            st.markdown(style_card("Average Purchase Value (AED)", f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f}", "#3F51B5"), unsafe_allow_html=True)
+
+        # Group transactions by YEAR for a line chart
         yearly_transactions = (
             customer_transactions.groupby("YEAR")["Total Amount Purchased"]
             .sum()
             .reset_index()
         )
 
-        # Create an interactive line plot using Plotly
+        # Interactive line plot with gradient color
+        st.subheader("📊 Yearly Transactions")
         fig = px.line(
             yearly_transactions,
             x="YEAR",
@@ -116,50 +140,22 @@ if not customer_data.empty:
             markers=True,
             title=f"Yearly Transactions for {customer_name}",
             template="plotly_white",
+            line_shape="linear",
         )
-
-        # Update layout for a professional look
+        fig.update_traces(
+            line_color="purple",
+            mode="lines+markers",
+        )
         fig.update_layout(
-            xaxis=dict(
-                tickmode="linear",  # Show only distinct year values
-                tickformat=".0f",  # Remove decimals
-            ),
+            xaxis=dict(tickmode="linear", tickformat=".0f"),  # Clean X-axis
             xaxis_title="Year",
             yaxis_title="Total Amount Purchased (AED)",
         )
-
-        # Display the plot
         st.plotly_chart(fig, use_container_width=True)
-
-        # Display additional customer insights
-        st.markdown("---")
-        st.subheader("📋 Additional Customer Insights")
-
-        # Calculate additional metrics
-        mean_time_between_purchases = customer_transactions["Mean_Time_Between_Purchases"].mean()
-        most_purchased_item = customer_transactions["ITEMGROUPDESCRIPTION"].mode()[0] if not customer_transactions["ITEMGROUPDESCRIPTION"].mode().empty else "N/A"
-        country = customer_transactions["COUNTRYNAME"].iloc[0]
-
-        # Display customer insights as separate metrics
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric("Country", country)
-            st.metric("Customer Lifetime (Months)", customer_transactions["Customer_Lifetime"].iloc[0])
-            st.metric("Months Since Last Purchase", customer_transactions["Months_Since_Last_Purchase"].iloc[0])
-
-        with col2:
-            st.metric("Maximum Months Without Purchase", customer_transactions["Max_Time_Without_Purchase"].iloc[0])
-            st.metric("Mean Time Between Purchases (Months)", f"{mean_time_between_purchases:.2f}")
-            st.metric("Total Transactions", customer_transactions["Customer_Transactions"].iloc[0])
-
-        with col3:
-            st.metric("Average Purchase Value (AED)", f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f}")
-            st.metric("Trend Classification", customer_transactions["Trend_Classification"].iloc[0])
-            st.metric("Most Purchased Item", most_purchased_item)
 
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
+
 
