@@ -109,22 +109,21 @@ if not customer_data.empty:
             .reset_index()
         )
 
-        # Create an interactive bar chart using Plotly
-        fig = px.bar(
+        # Create an interactive line plot using Plotly
+        fig = px.line(
             yearly_transactions,
             x="YEAR",
             y="Total Amount Purchased",
-            color="YEAR",
+            markers=True,
             title=f"Yearly Transactions for {customer_name}",
-            text_auto=True,
-            template="plotly_dark",
+            template="plotly_white",
+            text="Total Amount Purchased",
         )
 
         # Update layout for a professional look
         fig.update_layout(
             xaxis_title="Year",
             yaxis_title="Total Amount Purchased (AED)",
-            coloraxis_showscale=False,
         )
 
         # Display the plot
@@ -134,57 +133,41 @@ if not customer_data.empty:
         st.markdown("---")
         st.subheader("📋 Additional Customer Insights")
 
-        # Prepare the data for the table
-        insights_data = {
-            "Metric": [
-                "Customer Lifetime",
-                "Months Since Last Purchase",
-                "Max Time Without Purchase",
-                "Trend Classification",
-                "Average Purchase Value (AED)",
-                "Total Transactions",
-            ],
-            "Value": [
-                customer_transactions["Customer_Lifetime"].iloc[0],
-                customer_transactions["Months_Since_Last_Purchase"].iloc[0],
-                customer_transactions["Max_Time_Without_Purchase"].iloc[0],
-                customer_transactions["Trend_Classification"].iloc[0],
-                f"{round(customer_transactions['Average_Purchase_Value'].iloc[0], 2):,.2f} AED",
-                customer_transactions["Customer_Transactions"].iloc[0],
-            ],
-        }
+        # Display customer insights as separate metrics or bar charts
+        col1, col2 = st.columns(2)
 
-        # Create a Plotly Table with conditional formatting
-        table_fig = go.Figure(
-            data=[
-                go.Table(
-                    header=dict(
-                        values=["<b>Metric</b>", "<b>Value</b>"],
-                        fill_color="#1F2937",
-                        font=dict(color="white", size=14),
-                        align="center",
-                    ),
-                    cells=dict(
-                        values=[
-                            insights_data["Metric"],
-                            insights_data["Value"],
-                        ],
-                        fill_color="#4B5563",
-                        font=dict(color="white", size=12),
-                        align="center",
-                    ),
-                )
-            ]
+        with col1:
+            st.metric("Customer Lifetime (Months)", customer_transactions["Customer_Lifetime"].iloc[0])
+            st.metric("Months Since Last Purchase", customer_transactions["Months_Since_Last_Purchase"].iloc[0])
+
+        with col2:
+            st.metric("Max Time Without Purchase (Months)", customer_transactions["Max_Time_Without_Purchase"].iloc[0])
+            st.metric("Total Transactions", customer_transactions["Customer_Transactions"].iloc[0])
+
+        # Display a bar chart for trend classification and average purchase value
+        st.markdown("### Trend Classification & Average Purchase Value")
+
+        bar_chart_data = pd.DataFrame({
+            "Metric": ["Trend Classification", "Average Purchase Value (AED)"],
+            "Value": [
+                customer_transactions["Trend_Classification"].iloc[0],
+                customer_transactions["Average_Purchase_Value"].iloc[0],
+            ],
+        })
+
+        trend_chart = px.bar(
+            bar_chart_data,
+            x="Metric",
+            y="Value",
+            title="Customer Insights",
+            text="Value",
+            template="plotly_white",
         )
 
-        table_fig.update_layout(margin=dict(l=0, r=0, t=10, b=10))
-
-        # Display the table
-        st.plotly_chart(table_fig, use_container_width=True)
+        st.plotly_chart(trend_chart, use_container_width=True)
 
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
-
 
