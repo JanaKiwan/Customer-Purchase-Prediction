@@ -135,22 +135,31 @@ if not customer_data.empty:
         st.markdown("---")
         st.subheader("📋 Additional Customer Insights")
 
+        # Calculate additional metrics
+        mean_time_between_purchases = customer_transactions["Mean_Time_Between_Purchases"].mean()
+        most_purchased_item = customer_transactions["ITEMGROUPDESCRIPTION"].mode()[0] if not customer_transactions["ITEMGROUPDESCRIPTION"].mode().empty else "N/A"
+        country = customer_transactions["COUNTRYNAME"].iloc[0]
+
         # Display customer insights as separate metrics
         col1, col2, col3 = st.columns(3)
 
         with col1:
+            st.metric("Country", country)
             st.metric("Customer Lifetime (Months)", customer_transactions["Customer_Lifetime"].iloc[0])
             st.metric("Months Since Last Purchase", customer_transactions["Months_Since_Last_Purchase"].iloc[0])
 
         with col2:
             st.metric("Maximum Months Without Purchase", customer_transactions["Max_Time_Without_Purchase"].iloc[0])
+            st.metric("Mean Time Between Purchases (Months)", f"{mean_time_between_purchases:.2f}")
             st.metric("Total Transactions", customer_transactions["Customer_Transactions"].iloc[0])
 
         with col3:
             st.metric("Average Purchase Value (AED)", f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f}")
             st.metric("Trend Classification", customer_transactions["Trend_Classification"].iloc[0])
+            st.metric("Most Purchased Item", most_purchased_item)
 
     else:
         st.warning(f"No transaction data available for {customer_name}.")
 else:
     st.error("Customer not found in the dataset.")
+
