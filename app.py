@@ -1,72 +1,85 @@
 import streamlit as st
 import pandas as pd
-import joblib
 import numpy as np
+import joblib
 
-# Load pre-trained models and preprocessing artifacts
+# =========================
+# Load Models and Pipelines
+# =========================
+# Load preprocessing pipeline, original column structure, and preprocessing metadata
+preprocessor_pipeline = joblib.load("preprocessor_pipeline.pkl")
+original_columns = joblib.load("original_columns.pkl")
+preprocessing_metadata = joblib.load("preprocessing_metadata.pkl")
+
+# Load models and their results
 models = {
-    'Decision Tree': ('best_decision_tree_model.pkl', 'decision_tree_model_results.npy'),
-    'Logistic Regression': ('best_logistic_pipeline.pkl', 'logistic_pipeline_results.npy'),
-    'Logistic Regression (L2)': ('best_lr_model.pkl', 'lr_model_results.npy'),
-    'Calibrated SVC': ('best_svc_pipeline.pkl', 'svc_pipeline_results.npy')
+    "Logistic Regression (L1)": {
+        "model": joblib.load("best_logistic_pipeline.pkl"),
+        "metrics": np.load("logistic_pipeline_results.npy", allow_pickle=True).item()
+    },
+    "Logistic Regression (L2)": {
+        "model": joblib.load("best_lr_model.pkl"),
+        "metrics": np.load("lr_model_results.npy", allow_pickle=True).item()
+    },
+    "Support Vector Classifier (Calibrated)": {
+        "model": joblib.load("best_svc_pipeline.pkl"),
+        "metrics": np.load("svc_pipeline_results.npy", allow_pickle=True).item()
+    },
+    "Decision Tree": {
+        "model": joblib.load("best_decision_tree_model.pkl"),
+        "metrics": np.load("decision_tree_model_results.npy", allow_pickle=True).item()
+    }
 }
 
-# Load preprocessing pipeline and metadata
-preprocessor = joblib.load('preprocessor_pipeline.pkl')
-original_columns = joblib.load('original_columns.pkl')
-
-# Load customer data for prediction
-data = pd.read_excel('customer_transformed_data_with_cltv.xlsx')
-
-# Remove the 'Purchase Probability' column for prediction
-if 'Purchase Probability' in data.columns:
-    data = data.drop(columns=['Purchase Probability'])
+# =========================
+# Load Dataset
+# =========================
+# Directly load the dataset for predictions
+data = pd.read_excel("customer_transformed_data_with_cltv.xlsx")
+st.title("Customer Purchase Prediction")
+st.write("Loaded Dataset Preview:")
+st.dataframe(data.head())
 
 # Align columns to the original structure
-data = data[original_columns]
+data = data[original_columns["categorical_vars"] + original_columns["numerical_vars"]]
 
-# Streamlit app setup
-st.title("Customer Purchase Prediction")
+# =========================
+# Model Selection
+# =========================
+st.sidebar.title("Model Selection")
+selected_model_name = st.sidebar.selectbox("Select a Model for Prediction:", list(models.keys()))
+selected_model = models[selected_model_name]["model"]
+selected_metrics = models[selected_model_name]["metrics"]
+st.sidebar.write(f"Selected Model: **{selected_model_name}**")
 
-# Display the input data
-st.write("Loaded Customer Data for Prediction:")
-st.write(data.head())
+# =========================
+# Prediction
+# =========================
+if st.button("Predict"):
+    # Preprocess the data
+    preprocessed_data = preprocessor_pipeline.transform(data)
 
-# Preprocess the data
-st.write("Preprocessing the data...")
-preprocessed_data = preprocessor.transform(data)
-st.success("Data successfully preprocessed!")
+    # Generate predictions and probabilities
+    predictions = selected_model.predict(preprocessed_data)
+    probabilities = selected_model.predict_proba(preprocessed_data)[:, 1]
 
-# Model selection
-model_name = st.selectbox("Select a model for prediction:", list(models.keys()))
-if model_name:
-    # Load the selected model and its best threshold
-    model_file, results_file = models[model_name]
-    model = joblib.load(model_file)
-    results = np.load(results_file, allow_pickle=True).item()
-    best_threshold = results.get('best_threshold', 0.5)
+    # Apply the best threshold from the model's training
+    threshold = selected_metrics.get("best_threshold", 0.5)
+    prediction_outcome = (probabilities >= threshold).astype(int)
 
-    # Predict
-    if st.button("Predict"):
-        proba = model.predict_proba(preprocessed_data)[:, 1]
-        predictions = (proba >= best_threshold).astype(int)
+    # Append results to the dataset
+    data["Purchase Prediction"] = prediction_outcome
+    data["Purchase Probability"] = probabilities
 
-        # Append predictions to the original data
-        data['Prediction'] = ['Yes' if pred else 'No' for pred in predictions]
-        data['Likelihood (%)'] = (proba * 100).round(2)
+    # Display the predictions
+    st.write("Prediction Results:")
+    st.dataframe(data)
 
-        # Display results
-        st.write("Prediction Results:")
-        st.write(data[['CUSTOMERNAME', 'Prediction', 'Likelihood (%)']])
-
-        # Allow downloading the results
-        output_file = 'prediction_results.xlsx'
-        data.to_excel(output_file, index=False)
-        with open(output_file, 'rb') as f:
-            st.download_button(
-                label="Download Prediction Results",
-                data=f,
-                file_name=output_file,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+    # Download link for results
+    st.download_button(
+        label="Download Predictions",
+        data=data.to_csv(index=False),
+        file_name="customer_predictions.csv",
+        mime="text/csv"
+    )
 
