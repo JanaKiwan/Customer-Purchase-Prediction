@@ -65,13 +65,13 @@ model_columns = {
 }
 
 # Streamlit App
-st.title("Customer Purchase Prediction Viewer")
+st.title("Customer Purchase Prediction Viewer 🎯")
 
 # Model Selection
 selected_model = st.selectbox("Select a Model", list(model_columns.keys()))
 
 # Sidebar Metrics
-st.sidebar.header("Model Metrics")
+st.sidebar.header("📊 Model Metrics")
 st.sidebar.metric("Threshold", model_metrics[selected_model]["threshold"])
 st.sidebar.metric("ROC AUC Score", model_metrics[selected_model]["roc_auc"])
 st.sidebar.metric("True Positive Rate", model_metrics[selected_model]["true_positive_rate"])
@@ -91,16 +91,16 @@ if not customer_data.empty:
     prediction = customer_data[prediction_col].iloc[0]
     probability = customer_data[probability_col].iloc[0] * 100  # Convert to percentage
 
-    # Display outcomes
+    # Display outcomes with colorful badges
     prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
-    st.markdown(f"### Prediction: **{prediction_text}**")
-    st.markdown(f"### Probability: **{probability:.2f}%**")
+    st.markdown(f"### Prediction: **:green[{prediction_text}]**" if prediction == 1 else f"### Prediction: **:red[{prediction_text}]**")
+    st.markdown(f"### Probability: **:blue[{probability:.2f}%]**")
 
     # Display transaction-level data for the selected customer
     customer_transactions = transaction_data[transaction_data["CUSTOMERNAME"] == customer_name]
 
     if not customer_transactions.empty:
-        st.subheader("Transaction-Level Insights")
+        st.subheader("📈 Transaction-Level Insights")
 
         # Group transactions by YEAR
         yearly_transactions = (
@@ -109,39 +109,30 @@ if not customer_data.empty:
             .reset_index()
         )
 
-        # Create an interactive line plot using Plotly
-        fig = px.line(
+        # Create an interactive bar chart using Plotly
+        fig = px.bar(
             yearly_transactions,
             x="YEAR",
             y="Total Amount Purchased",
-            color_discrete_sequence=["#636EFA"],
-            markers=True,
+            color="YEAR",
             title=f"Yearly Transactions for {customer_name}",
+            text_auto=True,
+            template="plotly_dark",
         )
 
-        # Add hover information
-        fig.update_traces(
-            hovertemplate="<b>Total Amount Purchased:</b> %{y:,.2f} AED"
-        )
-
-        # Update layout to make it clean and professional
+        # Update layout for a professional look
         fig.update_layout(
             xaxis_title="Year",
             yaxis_title="Total Amount Purchased (AED)",
-            xaxis=dict(
-                tickvals=sorted(yearly_transactions["YEAR"].unique()),  # Only show unique years
-                tickformat="d",  # Format as integers
-            ),
-            yaxis=dict(tickformat=",.2f"),  # Format y-axis as currency
-            template="plotly_white",
+            coloraxis_showscale=False,
         )
 
-        # Display the plot in Streamlit
+        # Display the plot
         st.plotly_chart(fig, use_container_width=True)
 
-        # Display additional customer insights with a colorful table
+        # Display additional customer insights
         st.markdown("---")
-        st.subheader("Additional Customer Insights")
+        st.subheader("📋 Additional Customer Insights")
 
         # Prepare the data for the table
         insights_data = {
@@ -163,13 +154,13 @@ if not customer_data.empty:
             ],
         }
 
-        # Create a Plotly Table
+        # Create a Plotly Table with conditional formatting
         table_fig = go.Figure(
             data=[
                 go.Table(
                     header=dict(
                         values=["<b>Metric</b>", "<b>Value</b>"],
-                        fill_color="#2D3748",
+                        fill_color="#1F2937",
                         font=dict(color="white", size=14),
                         align="center",
                     ),
@@ -178,19 +169,15 @@ if not customer_data.empty:
                             insights_data["Metric"],
                             insights_data["Value"],
                         ],
-                        fill_color="#E2E8F0",
-                        font=dict(color="black", size=12),
+                        fill_color="#4B5563",
+                        font=dict(color="white", size=12),
                         align="center",
                     ),
                 )
             ]
         )
 
-        # Update layout for the table
-        table_fig.update_layout(
-            margin=dict(l=0, r=0, t=10, b=10),
-            height=400,
-        )
+        table_fig.update_layout(margin=dict(l=0, r=0, t=10, b=10))
 
         # Display the table
         st.plotly_chart(table_fig, use_container_width=True)
