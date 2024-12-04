@@ -1,160 +1,77 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-# Load datasets
-@st.cache_data
+# Load Main Data
+@st.cache
 def load_data():
-    return pd.read_excel("customer_agg_with_predictions.xlsx")
+    try:
+        data = pd.read_excel("C:/Users/gigik/OneDrive/Desktop/combined_data_with_predictions.xlsx")
+        transaction_data = pd.read_excel("C:/Users/gigik/OneDrive/Desktop/df (1).xlsx")
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return None, None
 
-@st.cache_data
-def load_transaction_data():
-    return pd.read_excel("df.xlsx")
+    # Merge data
+    data = pd.merge(
+        data,
+        transaction_data[['CUSTOMERNAME', 'COUNTRYNAME', 'YEAR', 'AMOUNT', 'ITEMGROUPDESCRIPTION']],
+        on='CUSTOMERNAME',
+        how='left'
+    )
 
-# Load datasets
-data = load_data()
-transaction_data = load_transaction_data()
+    # Fill missing years
+    all_years = pd.DataFrame({'YEAR': range(2020, 2024 + 1)})
+    data = data.merge(all_years, on='YEAR', how='outer').fillna({'AMOUNT': 0})
 
-# Map metrics and thresholds for each model
-model_metrics = {
-    "Lasso Logistic Regression": {
-        "threshold": 0.31,
-        "roc_auc": 0.93,
-        "true_positive_rate": "91%",
-        "false_negative_rate": "15%",
-    },
-    "L2 Logistic Regression": {
-        "threshold": 0.31,
-        "roc_auc": 0.93,
-        "true_positive_rate": "91%",
-        "false_negative_rate": "15%",
-    },
-    "Calibrated SVC": {
-        "threshold": 0.35,
-        "roc_auc": 0.93,
-        "true_positive_rate": "90%",
-        "false_negative_rate": "21%",
-    },
-    "Decision Tree": {
-        "threshold": 0.39,
-        "roc_auc": 0.90,
-        "true_positive_rate": "84%",
-        "false_negative_rate": "9%",
-    },
-}
+    return data, transaction_data
 
-# Model columns
-model_columns = {
-    "Lasso Logistic Regression": (
-        "Lasso Logistic Regression_Prediction",
-        "Lasso Logistic Regression_Probability",
-    ),
-    "L2 Logistic Regression": (
-        "L2 Logistic Regression_Prediction",
-        "L2 Logistic Regression_Probability",
-    ),
-    "Calibrated SVC": (
-        "Calibrated SVC_Prediction",
-        "Calibrated SVC_Probability",
-    ),
-    "Decision Tree": (
-        "Decision Tree_Prediction",
-        "Decision Tree_Probability",
-    ),
-}
+data, transaction_data = load_data()
+if data is None:
+    st.stop()
 
-# Streamlit App
-st.title("Customer Purchase Insights Dashboard")
+# Sidebar Filters
+st.sidebar.header("Filters")
+segment_filter = st.sidebar.selectbox("Select Segment:", ["All"] + data['Segment'].dropna().unique().tolist())
+country_filter = st.sidebar.selectbox("Select Country:", ["All"] + data['COUNTRYNAME'].dropna().unique().tolist())
+item_group_filter = st.sidebar.selectbox("Select Item Group:", ["All"] + data['ITEMGROUPDESCRIPTION'].dropna().unique().tolist())
+customer_filter = st.sidebar.selectbox("Select Customer:", ["All"] + data['CUSTOMERNAME'].dropna().unique().tolist())
+metric_filter = st.sidebar.selectbox("Select Metric:", ["Sales", "Refunds"])
 
-# Model Selection
-selected_model = st.selectbox("Select a Model", list(model_columns.keys()))
+# Filter Data
+filtered_data = data.copy()
+if segment_filter != "All":
+    filtered_data = filtered_data[filtered_data['Segment'] == segment_filter]
+if country_filter != "All":
+    filtered_data = filtered_data[filtered_data['COUNTRYNAME'] == country_filter]
+if item_group_filter != "All":
+    filtered_data = filtered_data[filtered_data['ITEMGROUPDESCRIPTION'] == item_group_filter]
+if customer_filter != "All":
+    filtered_data = filtered_data[filtered_data['CUSTOMERNAME'] == customer_filter]
 
-# Sidebar Metrics
-st.sidebar.header("📊 Model Metrics")
-st.sidebar.metric("Threshold", model_metrics[selected_model]["threshold"])
-st.sidebar.metric("ROC AUC Score", model_metrics[selected_model]["roc_auc"])
-st.sidebar.metric("True Positive Rate", model_metrics[selected_model]["true_positive_rate"])
-st.sidebar.metric("False Negative Rate", model_metrics[selected_model]["false_negative_rate"])
+# Add Metrics
+filtered_data['Sales'] = filtered_data['AMOUNT'].apply(lambda x: x if x > 0 else 0)
+filtered_data['Refunds'] = filtered_data['AMOUNT'].apply(lambda x: -x if x < 0 else 0)
 
-# Customer Dropdown
-customer_name = st.selectbox("Select a Customer", data["CUSTOMERNAME"].unique())
+# Display Metrics
+st.header("Key Metrics")
+st.metric("Total Customers", filtered_data['CUSTOMERNAME'].nunique())
+st.metric("Total Sales", f"{filtered_data['Sales'].sum():,.2f} AED")
+st.metric("Total Refunds", f"{filtered_data['Refunds'].sum():,.2f} AED")
 
-# Extract model-specific columns
-prediction_col, probability_col = model_columns[selected_model]
+# Trends Chart
+st.header(f"{metric_filter} Trends")
+trends = filtered_data.groupby('YEAR')[metric_filter].sum().reset_index()
+fig = px.line(trends, x='YEAR', y=metric_filter, title=f"{metric_filter} Trends (2020-2024)")
+st.plotly_chart(fig)
 
-# Filter data for the selected customer
-customer_data = data[data["CUSTOMERNAME"] == customer_name]
+# Download Button
+st.download_button(
+    label="Download Filtered Data",
+    data=filtered_data.to_csv(index=False),
+    file_name='filtered_data.csv',
+    mime='text/csv'
+)
 
-if not customer_data.empty:
-    prediction = customer_data[prediction_col].iloc[0]
-    probability = customer_data[probability_col].iloc[0] * 100  # Convert to percentage
-
-    # Display outcomes with badges
-    prediction_text = "Will Purchase" if prediction == 1 else "Will Not Purchase"
-    st.markdown(f"### Prediction: **:green[{prediction_text}]**" if prediction == 1 else f"### Prediction: **:red[{prediction_text}]**")
-    st.markdown(f"### Probability: **:blue[{probability:.2f}%]**")
-
-    # Transaction data for selected customer
-    customer_transactions = transaction_data[transaction_data["CUSTOMERNAME"] == customer_name]
-
-    if not customer_transactions.empty:
-        st.subheader("📈 Customer Insights")
-
-        # Calculate additional metrics
-        mean_time_between_purchases = customer_transactions["Mean_Time_Between_Purchases"].mean()
-        most_purchased_item = customer_transactions["ITEMGROUPDESCRIPTION"].mode()[0] if not customer_transactions["ITEMGROUPDESCRIPTION"].mode().empty else "N/A"
-        country = customer_transactions["COUNTRYNAME"].iloc[0]
-
-        # Display metrics in styled cards
-        def style_card(header, value, background_color):
-            return f"""
-            <div style="background-color: {background_color}; padding: 10px; border-radius: 5px; text-align: center; color: white; font-size: 18px;">
-                <strong>{header}</strong><br>{value}
-            </div>
-            """
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown(style_card("Country", country, "#4CAF50"), unsafe_allow_html=True)
-            st.markdown(style_card("Customer Lifetime (Months)", customer_transactions["Customer_Lifetime"].iloc[0], "#2196F3"), unsafe_allow_html=True)
-        with col2:
-            st.markdown(style_card("Mean Time Between Purchases (Months)", f"{mean_time_between_purchases:.2f}", "#FF9800"), unsafe_allow_html=True)
-            st.markdown(style_card("Total Transactions", customer_transactions["Customer_Transactions"].iloc[0], "#9C27B0"), unsafe_allow_html=True)
-        with col3:
-            st.markdown(style_card("Most Purchased Item", most_purchased_item, "#F44336"), unsafe_allow_html=True)
-            st.markdown(style_card("Average Purchase Value (AED)", f"{customer_transactions['Average_Purchase_Value'].iloc[0]:,.2f}", "#3F51B5"), unsafe_allow_html=True)
-
-        # Group transactions by YEAR for a line chart
-        yearly_transactions = (
-            customer_transactions.groupby("YEAR")["Total Amount Purchased"]
-            .sum()
-            .reset_index()
-        )
-
-        # Interactive line plot with gradient color
-        st.subheader("📊 Yearly Transactions")
-        fig = px.line(
-            yearly_transactions,
-            x="YEAR",
-            y="Total Amount Purchased",
-            markers=True,
-            title=f"Yearly Transactions for {customer_name}",
-            template="plotly_white",
-            line_shape="linear",
-        )
-        fig.update_traces(
-            line_color="purple",
-            mode="lines+markers",
-        )
-        fig.update_layout(
-            xaxis=dict(tickmode="linear", tickformat=".0f"),  # Clean X-axis
-            xaxis_title="Year",
-            yaxis_title="Total Amount Purchased (AED)",
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    else:
-        st.warning(f"No transaction data available for {customer_name}.")
-else:
-    st.error("Customer not found in the dataset.")
 
